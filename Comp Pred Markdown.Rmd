@@ -1,0 +1,213 @@
+---
+title: "Dual Effect of Competition and Predation in the Chilean Rocky Intertidal"
+author: "Mary McCabe"
+date: "October 18, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##Set your working directory in order to pull in files.
+##Add the libraries and packages you plan on using,
+```{r}
+# Set Working Directory - Connect to Files
+setwd("C:/Users/mkmccabe/ECIM Chile/Competition Predation Exp")
+
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(tidyr)
+  library(dplyr)
+  library(DT)
+  library(gridExtra)
+  library(sciplot)
+})
+```
+##Read in the data files you'll be working with and then combine them, making sure all column line up.
+```{r}
+# If you have a .csv file (check the original file to know if the separator is ";" or ",").
+
+Temblador=read.csv("Temblador.csv", header=T, sep=",")
+
+Guanaqueros=read.csv("Guanaqueros.csv", header=T, sep=",")
+
+Losmolles=read.csv("Los Molles.csv", header=T, sep=",")
+
+Lascruces=read.csv("Las Cruces.csv", header=T, sep=",")
+
+master <- rbind(Temblador,Guanaqueros,Losmolles,Lascruces)
+
+```
+
+##Add additional columns of entities you wish to explore. In this case I want to look at total coverage of the mussel and barnacle species.
+##Change the attribute type of the data column to be in date format.
+```{r}
+master$PeruProp=(master$Peru + master$Peru.1)/(master$Total.Coverage)*100
+master$JehliusProp=(master$Jehlius + master$Jehlius.1)/(master$Total.Coverage)*100
+master$NotoProp=(master$Noto + master$Noto.1)/(master$Total.Coverage)*100
+master$bothTreat=(paste(master$Depredacion, master$Tratamiento, sep = ""))
+
+
+master$Fecha=as.Date(master$Fecha, format = "%m/%d/%Y")
+
+datatable(master)  
+
+```
+
+##Clean up data table, include columns you only want to analyze.
+%>% Pipe Operator - you think 
+Computer shortcut is Ctrl + Shft + m
+`select` the columns we need for analysis  
+`gather` to move from wide to long - key is associated with column names, value is what is contained in those columns 
+`spread` to move from long to wide  
+`rename` to rename a column
+`mutate` to create a new variables (new columns)
+`filter` to filter our data table, maybe by a specific treatment 
+```{r}
+master_clean <- master %>% 
+  rename(Peru_count = n.Peru.Total) %>% 
+  select(Sitio, Fecha, Plot, Depredacion, Tratamiento, bothTreat, PeruProp, JehliusProp, NotoProp, Peru_count)
+  
+datatable(master_clean)  
+
+```
+
+##Number of Mussel Indivuals for each treatment and site and the end of the experiment
+
+```{r}
+ind_Peru <- master_clean %>% 
+   group_by(Sitio, Fecha, Depredacion, Tratamiento, bothTreat) %>% 
+  summarize(mean_count = mean(Peru_count, na.rm = TRUE), se_count = se(Peru_count, na.rm = TRUE))
+
+mussels_only <- ind_Peru %>% 
+  filter(bothTreat == "NoM" | bothTreat == "NoMB" | bothTreat == "SiM" | bothTreat == "SiMB")
+  
+
+    
+head(mussels_only)
+
+```
+## Graphing Number of Individual Mussels for each site over time and treatment
+
+```{r}
+
+## Creating my own label with italics as part of the axis label.
+mylabel <- c(expression(paste(italic("Perumytilus purpuratus")," Count (# of Individuals)")))
+
+
+ggplot(mussels_only, aes(Fecha, mean_count, group=bothTreat, shape=bothTreat, colour=bothTreat)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_count - se_count, ymax= mean_count + se_count), width=0.2)+
+  theme_classic() +
+  labs (x = "Date", y = mylabel) +
+  ggtitle ("Spatial and Temporal Variability of Mussel Counts across Treatments")+
+  scale_colour_discrete(name="Experimental\nCondition",
+                         breaks=c("NoM", "NoMB", "SiM", "SiMB"),
+                         labels=c("-P Mono", "-P Mixed", "+P Mono", "+P Mixed")) +
+ scale_shape_discrete(name="Experimental\nCondition",
+                         breaks=c("NoM", "NoMB", "SiM", "SiMB"),
+                         labels=c("-P Mono", "-P Mixed", "+P Mono", "+P Mixed")) +
+  scale_x_date(date_labels = "%Y-%m")+
+  facet_wrap(~ Sitio, ncol = 2)
+
+  ggsave("musselcounts.pdf")     
+  
+```
+
+
+
+
+##Mussel Coverage over time
+
+```{r}
+cov_Peru <- master_clean %>% 
+   group_by(Sitio, Fecha, Depredacion, Tratamiento, bothTreat) %>% 
+  summarize(mean_perucov = mean(PeruProp, na.rm = TRUE), se_perucov = se(PeruProp, na.rm = TRUE))
+
+mussels_cov <- cov_Peru %>% 
+  filter(bothTreat == "NoM" | bothTreat == "NoMB" | bothTreat == "SiM" | bothTreat == "SiMB")
+  
+
+    
+head(mussels_cov)
+
+```
+## Graphing Coverage of Mussels for each site over time and treatment
+
+```{r}
+
+## Creating my own label with italics as part of the axis label.
+mylabel <- c(expression(paste("Proportion of", italic(" P. purpuratus")," (% Coverage)")))
+
+
+ggplot(mussels_cov, aes(Fecha, mean_perucov, group=bothTreat, shape=bothTreat, colour=bothTreat)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_perucov - se_perucov, ymax= mean_perucov + se_perucov), width=0.2)+
+  theme_classic() +
+  labs (x = "Date", y = mylabel) +
+  ggtitle ("Spatial and Temporal Variability of Mussel Coverage across Treatments")+
+  scale_colour_discrete(name="Experimental\nCondition",
+                         breaks=c("NoM", "NoMB", "SiM", "SiMB"),
+                         labels=c("-P Mono", "-P Mixed", "+P Mono", "+P Mixed")) +
+ scale_shape_discrete(name="Experimental\nCondition",
+                         breaks=c("NoM", "NoMB", "SiM", "SiMB"),
+                         labels=c("-P Mono", "-P Mixed", "+P Mono", "+P Mixed")) +
+  scale_x_date(date_labels = "%Y-%m")+
+  facet_wrap(~ Sitio, ncol = 2)
+
+  ggsave("musselcoverage.pdf", width = 20, height = 13, units = "cm")     
+  
+```
+
+
+##Barnacle (Jehlius) Coverage over time
+
+```{r}
+cov_Jehlius <- master_clean %>% 
+   group_by(Sitio, Fecha, Depredacion, Tratamiento, bothTreat) %>% 
+  summarize(mean_jehcov = mean(JehliusProp, na.rm = TRUE), se_jehcov = se(JehliusProp, na.rm = TRUE))
+
+jehlius_cov <- cov_Jehlius %>% 
+  filter(bothTreat == "NoB" | bothTreat == "NoMB" | bothTreat == "SiB" | bothTreat == "SiMB")
+  
+
+    
+head(jehlius_cov)
+
+```
+
+## Graphing Coverage of (Jehlius) Barnacles for each site over time and treatment
+
+```{r}
+
+## Creating my own label with italics as part of the axis label.
+mylabel <- c(expression(paste("Proportion of", italic(" J. cirratus")," (% Coverage)")))
+
+
+ggplot(jehlius_cov, aes(Fecha, mean_jehcov, group=bothTreat, shape=bothTreat, colour=bothTreat)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = mean_jehcov - se_jehcov, ymax= mean_jehcov + se_jehcov), width=0.2)+
+  theme_classic() +
+  labs (x = "Date", y = mylabel) +
+  ggtitle ("Spatial and Temporal Variability of Jehlius cirratus Coverage across Treatments")+
+  scale_colour_discrete(name="Experimental\nCondition",
+                         breaks=c("NoB", "NoMB", "SiB", "SiMB"),
+                         labels=c("-P Mono", "-P Mixed", "+P Mono", "+P Mixed")) +
+ scale_shape_discrete(name="Experimental\nCondition",
+                         breaks=c("NoB", "NoMB", "SiB", "SiMB"),
+                         labels=c("-P Mono", "-P Mixed", "+P Mono", "+P Mixed")) +
+  scale_x_date(date_labels = "%Y-%m")+
+  facet_wrap(~ Sitio, ncol = 2)
+
+  ggsave("barnaclecoverage.pdf", width = 20, height = 13, units = "cm")     
+  
+```
+
+
+
+
+
+
